@@ -53,8 +53,7 @@ double prevEnergyConsumed[4] = {0.0,0.0,0.0,0.0};
  
 
 
-void
-CalculateThroughput()
+void CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
     //double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
@@ -65,6 +64,7 @@ CalculateThroughput()
     lastTotalRx = sink->GetTotalRx();
     Simulator::Schedule(MilliSeconds(1000), &CalculateThroughput);
 }
+
 void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContainer humiditySensorNodes,NodeContainer pressureSensorNodes,NodeContainer soundSensorNodes,NodeContainer apWifiNode) {
     totalEnergyConsumed = 0.0;
     for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
@@ -87,7 +87,7 @@ void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContai
         }
     }
     
-        for (size_t i = 0; i < humiditySensorNodes.GetN(); ++i) {
+    for (size_t i = 0; i < humiditySensorNodes.GetN(); ++i) {
         Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(pressureSensorNodes.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
         if (energySource) {
             double energyConsumed = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
