@@ -22,6 +22,7 @@
 #include "ns3/constant-velocity-mobility-model.h"
 #include "ns3/energy-module.h"
 #include "ns3/wifi-radio-energy-model-helper.h"
+#include "ns3/aodv-module.h"
 
 
 
@@ -33,7 +34,12 @@ using namespace ns3;
 
 Ptr<PacketSink> sink;
 Ptr<PacketSink> sink2;
+Ptr<PacketSink> sink3;
+Ptr<PacketSink> sink4;
 uint64_t lastTotalRx = 0;
+uint64_t lastTotalRx2 = 0;
+uint64_t lastTotalRx3 = 0;
+uint64_t lastTotalRx4 = 0;
 std::ofstream throughputFile;
 double totalEnergyConsumed = 0.0;
 std::vector<double> nodeEnergyConsumed;
@@ -43,8 +49,8 @@ void
 CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
-    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
-                
+    //double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
+    double cur = ((sink->GetTotalRx() - lastTotalRx)+ (sink2->GetTotalRx() - lastTotalRx2) + (sink3->GetTotalRx() - lastTotalRx3) + (sink4->GetTotalRx() - lastTotalRx4)) * 8.0 /1e6;
     throughputFile << now.GetSeconds() << "\t" << cur << std::endl;
     
 
@@ -99,7 +105,17 @@ void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContai
     Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, temperatureSensorNodes, humiditySensorNodes,pressureSensorNodes,soundSensorNodes);
 }
 
-
+void dos_fn(NodeContainer attackerNode,Ipv4InterfaceContainer apInterface){
+	OnOffHelper tcpDOS("ns3::TcpSocketFactory",(InetSocketAddress(apInterface.GetAddress(0),9)));
+    tcpDOS.SetAttribute("PacketSize",UintegerValue(43)); /*Replace ENTER_PAYLOAD_SIZE_IN_BYTES_HERE with the avg payload size for DOS attacks*/
+    tcpDOS.SetAttribute("OnTime",StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    tcpDOS.SetAttribute("OffTime",StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    tcpDOS.SetAttribute("DataRate",DataRateValue(DataRate("5Mbps")));
+    ApplicationContainer tcpDOSApp = tcpDOS.Install(attackerNode);
+    tcpDOSApp.Start(Seconds(0.0));
+    tcpDOSApp.Stop(Seconds(100.0));
+    Simulator :: Schedule(Seconds(0.1),&(dos_fn),attackerNode,apInterface);
+}
 
 int
 main(int argc, char *argv[]){
@@ -196,8 +212,9 @@ main(int argc, char *argv[]){
     
     
     
-    
+    AodvHelper aodv;
     InternetStackHelper stack;
+    //stack.SetRoutingHelper(aodv);
     stack.Install(apWifiNode);
     stack.Install(temperatureSensorNodes);
     stack.Install(attackerNode);
@@ -314,10 +331,13 @@ main(int argc, char *argv[]){
     PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",InetSocketAddress(InetSocketAddress(Ipv4Address::GetAny(), 9)));
     ApplicationContainer sinkApp = sinkHelper.Install(apWifiNode.Get(0));
     ApplicationContainer secondSinkApp = sinkHelper.Install(apWifiNode.Get(1));
+    ApplicationContainer thirdSinkApp = sinkHelper.Install(apWifiNode.Get(2));
+    ApplicationContainer fourthSinkApp = sinkHelper.Install(apWifiNode.Get(3));
     
     sink2 = StaticCast<PacketSink>(secondSinkApp.Get(0));
     sink = StaticCast<PacketSink>(sinkApp.Get(0));
-    
+    sink3 = StaticCast<PacketSink>(thirdSinkApp.Get(0));
+    sink4 = StaticCast<PacketSink>(fourthSinkApp.Get(0));
     
     OnOffHelper temperaturePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
     temperaturePktServer.SetAttribute("PacketSize", UintegerValue(3));
@@ -347,14 +367,9 @@ main(int argc, char *argv[]){
     soundPktServer.SetAttribute("DataRate", DataRateValue(DataRate("20Kb/s")));
     ApplicationContainer soundPktServerApp = soundPktServer.Install(soundSensorNodes);
     
-    OnOffHelper tcpDOS("ns3::TcpSocketFactory",(InetSocketAddress(apInterface.GetAddress(0),9)));
-    tcpDOS.SetAttribute("PacketSize",UintegerValue(43)); /*Replace ENTER_PAYLOAD_SIZE_IN_BYTES_HERE with the avg payload size for DOS attacks*/
-    tcpDOS.SetAttribute("OnTime",StringValue("ns3::ConstantRandomVariable[Constant=100]"));
-    tcpDOS.SetAttribute("OffTime",StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-    tcpDOS.SetAttribute("DataRate",DataRateValue(DataRate("5Mbps")));
-    ApplicationContainer tcpDOSApp = tcpDOS.Install(attackerNode);
+
     
-    
+    Simulator :: Schedule(Seconds(1.0),&(dos_fn),attackerNode,apInterface);
     
 
     FlowMonitorHelper flowmon;
@@ -393,7 +408,6 @@ main(int argc, char *argv[]){
     humidityPktServerApp.Start(Seconds(1.2));
     soundPktServerApp.Start(Seconds(1.3));
     pressurePktServerApp.Start(Seconds(1.4));
-   // tcpDOSApp.Start(Seconds(1.0));
     
     BasicEnergySourceHelper basicSourceHelper;
     basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
